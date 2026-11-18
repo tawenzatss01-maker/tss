@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>المساعد الصوتي للمتعلمين - تاونزة العلمية</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 25px 15px;
+      background: #f3f5f9;
+      font-family: Arial, sans-serif;
+      color: #17243a;
+    }
+
+    .container {
+      max-width: 650px;
+      margin: auto;
+      width: 100%;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 25px;
+    }
+
+    .header h2 {
+      margin-bottom: 7px;
+    }
+
+    .header p {
+      color: #64748b;
+      font-size: 14px;
+    }
+
+    .panel {
+      background: white;
+      border-radius: 16px;
+      padding: 22px;
+      margin-bottom: 16px;
+      box-shadow: 0 3px 15px #0000000a;
+    }
+
+    .mic {
+      width: 90px;
+      height: 90px;
+      border-radius: 50%;
+      border: none;
+      background: #2563eb;
+      color: white;
+      font-size: 34px;
+      cursor: pointer;
+      display: block;
+      margin: 15px auto;
+    }
+
+    .mic:disabled {
+      opacity: .5;
+      cursor: not-allowed;
+    }
+
+    .mic.active {
+      background: #dc2626;
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+      50% {
+        box-shadow: 0 0 0 12px #dc262622;
+      }
+    }
+
+    input {
+      width: 100%;
+      padding: 13px;
+      border: 1px solid #cbd5e1;
+      border-radius: 9px;
+      font-size: 16px;
+      margin: 8px 0;
+      direction: rtl;
+    }
+
+    button.action {
+      width: 100%;
+      padding: 13px;
+      border: none;
+      border-radius: 9px;
+      background: #172f55;
+      color: white;
+      font-size: 15px;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+
+    #status {
+      text-align: center;
+      color: #64748b;
+      min-height: 25px;
+      font-size: 14px;
+      line-height: 1.7;
+    }
+
+    .student {
+      border: 1px solid #e2e8f0;
+      padding: 17px;
+      border-radius: 12px;
+      margin-top: 12px;
+    }
+
+    .student h3 {
+      margin: 0 0 15px;
+      font-size: 23px;
+    }
+
+    .info {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      border-bottom: 1px solid #edf0f4;
+      padding: 10px 0;
+    }
+
+    .info:last-child {
+      border: none;
+    }
+
+    .info span:first-child {
+      color: #64748b;
+    }
+
+    .class-name {
+      color: #166534;
+      font-weight: bold;
+      font-size: 24px;
+    }
+
+    .choose {
+      background: #eff6ff;
+      color: #1d4ed8;
+    }
+
+    .phone-link {
+      color: #15803d;
+      text-decoration: none;
+      font-weight: bold;
+      direction: ltr;
+      display: inline-block;
+    }
+
+    .phone-link:hover {
+      text-decoration: underline;
+    }
+
+    .error {
+      color: #dc2626 !important;
+    }
+
+    .success {
+      color: #15803d !important;
+    }
+
+    @media (max-width: 480px) {
+      body {
+        padding: 15px 10px;
+      }
+
+      .panel {
+        padding: 16px;
+      }
+
+      .student h3 {
+        font-size: 20px;
+      }
+
+      .class-name {
+        font-size: 22px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <div class="header">
+    <h2>المساعد الصوتي للمتعلمين</h2>
+    <p>إدارة الجودة – تاونزة العلمية</p>
+  </div>
+
+  <div class="panel">
+
+    <h3 style="text-align:center">
+      البحث الصوتي
+    </h3>
+
+    <button
+      type="button"
+      class="mic"
+      id="mic"
+      onclick="startListening()"
+      aria-label="بدء البحث الصوتي">
+      🎙
+    </button>
+
+    <div id="status">
+      اضغط على الميكروفون واقرأ اسم المتعلم
+    </div>
+
+    <input
+      id="transcript"
+      placeholder="سيظهر هنا الاسم الذي قرأته..."
+      autocomplete="off">
+
+    <button
+      type="button"
+      class="action"
+      onclick="search()">
+      البحث عن المتعلم
+    </button>
+
+  </div>
+
+  <div id="results"></div>
+
+</div>
+
+<script>
+  const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzOmrDF0IzE36um_IGqXuV1RcuABIKc2xTdj_d-FmQCcDlamKtD2NPO7FEoSUdqBzV_fg/exec";
+
+  const mic = document.getElementById('mic');
+  const statusBox = document.getElementById('status');
+  const transcriptBox = document.getElementById('transcript');
+  const results = document.getElementById('results');
+
+  let recognition = null;
+  let isListening = false;
+
+  // تشغيل الميكروفون
+  function startListening() {
+    if (isListening) {
+      return;
+    }
+
+    const SpeechRecognition =
+      window.SpeechRecognition ||
+      window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      statusBox.textContent = 'التعرف الصوتي غير متاح في هذا المتصفح.';
+      statusBox.className = 'error';
+      return;
+    }
+
+    try {
+      recognition = new SpeechRecognition();
+      recognition.lang = 'ar-DZ';
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 3;
+
+      isListening = true;
+      mic.classList.add('active');
+      mic.disabled = true;
+
+      statusBox.textContent = 'جاري تشغيل الميكروفون...';
+      statusBox.className = '';
+
+      recognition.onstart = function() {
+        statusBox.textContent = 'الميكروفون يعمل، تحدث الآن...';
+      };
+
+      recognition.onresult = function(event) {
+        if (!event.results || !event.results.length) {
+          return;
+        }
+
+        const text = event.results[0][0].transcript;
+        transcriptBox.value = text;
+
+        statusBox.textContent = 'تم التعرف على الصوت: ' + text;
+        statusBox.className = 'success';
+
+        search();
+      };
+
+      recognition.onnomatch = function() {
+        statusBox.textContent = 'لم يتم التعرف على الكلام. حاول مرة أخرى.';
+        statusBox.className = 'error';
+      };
+
+      recognition.onerror = function(event) {
+        console.error("Speech Recognition Error:", event.error);
+        const messages = {
+          "not-allowed": "المتصفح أو بيئة التطبيق منعت استخدام الميكروفون.",
+          "service-not-allowed": "خدمة التعرف الصوتي غير مسموح بها.",
+          "audio-capture": "تعذر الوصول إلى جهاز الميكروفون.",
+          "network": "تعذر الاتصال بخدمة التعرف الصوتي.",
+          "no-speech": "لم يتم اكتشاف صوت."
+        };
+
+        statusBox.textContent = messages[event.error] || "حدث خطأ في التعرف الصوتي: " + event.error;
+        statusBox.className = "error";
+      };
+
+      recognition.onend = function() {
+        isListening = false;
+        mic.classList.remove('active');
+        mic.disabled = false;
+      };
+
+      recognition.start();
+
+    } catch (error) {
+      isListening = false;
+      mic.classList.remove('active');
+      mic.disabled = false;
+      statusBox.textContent = 'تعذر تشغيل الميكروفون: ' + error.message;
+      statusBox.className = 'error';
+    }
+  }
+
+  // البحث عن المتعلم عبر جلب البيانات بالـ URL المباشر المتوافق مع doGet
+  function search() {
+    const text = transcriptBox.value.trim();
+
+    if (!text) {
+      statusBox.textContent = 'أدخل اسم المتعلم أولاً.';
+      statusBox.className = 'error';
+      return;
+    }
+
+    results.innerHTML = '';
+    statusBox.textContent = 'جاري البحث في قاعدة البيانات...';
+    statusBox.className = '';
+
+    const searchUrl = `${WEB_APP_URL}?name=${encodeURIComponent(text)}`;
+
+    fetch(searchUrl)
+      .then(response => response.json())
+      .then(data => {
+        displayResults(data);
+      })
+      .catch(error => {
+        console.error("Error:", error);
+        statusBox.textContent = 'حدث خطأ أثناء الاتصال بالخادم أو جلب النتائج.';
+        statusBox.className = 'error';
+      });
+  }
+
+  // عرض نتائج البحث
+  function displayResults(data) {
+    results.innerHTML = '';
+
+    if (!data || !data.status) {
+      statusBox.textContent = 'استجابة غير صحيحة من قاعدة البيانات.';
+      statusBox.className = 'error';
+      return;
+    }
+
+    if (data.status === 'not_found') {
+      statusBox.textContent = data.message || 'لم يتم العثور على المتعلم.';
+      statusBox.className = 'error';
+      return;
+    }
+
+    if (data.status === 'found') {
+      statusBox.textContent = 'تم العثور على المتعلم.';
+      statusBox.className = 'success';
+      showStudent(data.student);
+      return;
+    }
+
+    if (data.status === 'multiple' || (data.students && data.students.length > 1)) {
+      statusBox.textContent = 'وجدت عدة نتائج محتملة. حدد المتعلم الصحيح:';
+      statusBox.className = '';
+
+      data.students.forEach(function(student) {
+        const card = document.createElement('div');
+        card.className = 'student choose';
+
+        const title = document.createElement('h3');
+        title.textContent = student.surname + ' ' + student.firstName;
+
+        const date = document.createElement('p');
+        date.textContent = 'تاريخ الميلاد: ' + (student.birth || 'غير مسجل');
+
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'action';
+        button.textContent = 'عرض بطاقة المتعلم';
+
+        button.onclick = function() {
+          results.innerHTML = '';
+          showStudent(student);
+          statusBox.textContent = 'تم تحديد المتعلم.';
+          statusBox.className = 'success';
+        };
+
+        card.append(title, date, button);
+        results.appendChild(card);
+      });
+      return;
+    }
+
+    statusBox.textContent = 'لم يتم التعرف على شكل نتائج البحث.';
+    statusBox.className = 'error';
+  }
+
+  // عرض بطاقة المتعلم مع هاتفي الأب والأم
+  function showStudent(s) {
+    if (!s) return;
+
+    const card = document.createElement('div');
+    card.className = 'panel student';
+
+    const title = document.createElement('h3');
+    title.textContent = (s.surname || '') + ' ' + (s.firstName || '');
+
+    const fields = [
+      ['اللقب', s.surname || 'غير مسجل'],
+      ['الاسم', s.firstName || 'غير مسجل'],
+      ['الأب', s.fatherName || 'غير مسجل'],
+      ['تاريخ الميلاد', s.birth || 'غير مسجل']
+    ];
+
+    fields.forEach(function(item) {
+      const row = document.createElement('div');
+      row.className = 'info';
+
+      const label = document.createElement('span');
+      label.textContent = item[0];
+
+      const value = document.createElement('strong');
+      value.textContent = item[1];
+
+      row.append(label, value);
+      card.appendChild(row);
+    });
+
+    function addPhoneRow(labelText, phoneValue) {
+      const row = document.createElement('div');
+      row.className = 'info';
+
+      const label = document.createElement('span');
+      label.textContent = labelText;
+
+      const value = document.createElement('strong');
+      const rawPhone = String(phoneValue || '').trim();
+      const phone = rawPhone.replace(/\D/g, '');
+
+      if (phone) {
+        const actions = document.createElement('span');
+        actions.style.display = 'flex';
+        actions.style.gap = '7px';
+        actions.style.flexWrap = 'wrap';
+        actions.style.justifyContent = 'flex-end';
+
+        function addAction(text, href, color, label) {
+          const link = document.createElement('a');
+          link.href = href;
+          link.textContent = text;
+          link.target = '_blank';
+          link.rel = 'noopener';
+          link.style.textDecoration = 'none';
+          link.style.fontWeight = 'bold';
+          link.style.padding = '7px 10px';
+          link.style.borderRadius = '8px';
+          link.style.background = color;
+          link.style.color = 'white';
+          link.setAttribute('aria-label', label);
+          actions.appendChild(link);
+        }
+
+        addAction('📞 اتصال', 'tel:' + phone, '#15803d', 'اتصال بـ ' + labelText);
+        addAction('💬 SMS', 'sms:' + phone, '#2563eb', 'إرسال رسالة نصية إلى ' + labelText);
+
+        let whatsappPhone = phone;
+        if (whatsappPhone.indexOf('0') === 0) {
+          whatsappPhone = '213' + whatsappPhone.substring(1);
+        }
+        addAction('🟢 واتساب', 'https://wa.me/' + whatsappPhone, '#16a34a', 'إرسال رسالة واتساب إلى ' + labelText);
+
+        value.appendChild(actions);
+      } else {
+        value.textContent = 'غير مسجل';
+      }
+
+      row.append(label, value);
+      card.appendChild(row);
+    }
+
+    addPhoneRow('هاتف الأب', s.fatherPhone);
+    addPhoneRow('هاتف الأم', s.motherPhone);
+
+    const classRow = document.createElement('div');
+    classRow.style.textAlign = 'center';
+    classRow.style.padding = '20px 5px';
+
+    const label = document.createElement('div');
+    label.textContent = 'القسم';
+
+    const classValue = document.createElement('div');
+    classValue.className = 'class-name';
+    classValue.textContent = s.className || 'غير محدد';
+
+    classRow.append(label, classValue);
+    card.append(title, classRow);
+    results.appendChild(card);
+  }
+</script>
+
+</body>
+</html>
